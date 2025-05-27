@@ -70,8 +70,8 @@ class TradingEnv(gym.Env):
         elif action == 2:  # Sell
             if self.position == 1:
                 raw_reward = (price - self.entry_price) * self.qty - price * fee * self.qty
-                reward = raw_reward / (self.entry_price * self.qty)
-                reward += 0.001 * self.hold_steps
+                reward = raw_reward / (self.entry_price * self.qty) * 100
+                reward += 0.01 * self.hold_steps
                 self.balance += raw_reward
                 self.position = 0
                 self.qty = 0
