@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  trading-bot:
+    build: .
+    container_name: trading-bot-premium
+    restart: unless-stopped
+
+    # Variables d'environnement
+    env_file:
+      - .env
+
+    # Volumes pour persistance
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+    # Configuration réseau
+    networks:
+      - trading-bot-network
+
+    # Resources limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sqlite3; sqlite3.connect('data/trading_bot.db').execute('SELECT 1')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL pour production (optionnel)
+  postgres:
+    image: postgres:15-alpine
+    container_name: trading-bot-db
+    restart: unless-stopped
+    profiles:
+      - production
+
+    environment:
+      POSTGRES_DB: trading_bot
+      POSTGRES_USER: botuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme123}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    ports:
+      - "5432:5432"
+
+    networks:
+      - trading-bot-network
+
+  # Redis pour cache (optionnel)
+  redis:
+    image: redis:7-alpine
+    container_name: trading-bot-cache
+    restart: unless-stopped
+    profiles:
+      - production
+
+    command: redis-server --appendonly yes
+
+    volumes:
+      - redis_data:/data
+
+    ports:
+      - "6379:6379"
+
+    networks:
+      - trading-bot-network
+
+  # Monitoring avec Prometheus (optionnel)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: trading-bot-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+
+    networks:
+      - trading-bot-network
+
+  # Grafana pour visualisation (optionnel)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trading-bot-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+
+    networks:
+      - trading-bot-network
+
+networks:
+  trading-bot-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
